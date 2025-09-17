@@ -6,6 +6,9 @@ from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from langchain_community.llms import Ollama # or from langchain_openai import OpenAI
 from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.llms import HuggingFaceEndpoint
+import os
+
 
 # A dictionary to map file extensions to document loaders
 LOADERS = {
@@ -136,11 +139,16 @@ def get_answer_from_llm(query):
         return "Please upload documents first.", []
     
     # Define the LLM (using Ollama as an example)
-    try:
-        # Replace model name if needed (ensure model exists locally)
-        llm = Ollama(model="llama2") # or llm = OpenAI(api_key="YOUR_API_KEY")
-    except Exception as e:
-        return f"LLM init error: {e}", []
+    # try:
+    #     # Replace model name if needed (ensure model exists locally)
+    #     llm = Ollama(model="llama2") # or llm = OpenAI(api_key="YOUR_API_KEY")
+    # except Exception as e:
+    #     return f"LLM init error: {e}", []
+    llm = HuggingFaceEndpoint(
+        repo_id="HuggingFaceH4/zephyr-7b-beta",     # ya koi bhi inference-supported model
+        huggingfacehub_api_token=os.environ["HF_TOKEN"],
+        temperature=0.2
+    )
     
     try:    
         # Create the RetrievalQA chain

@@ -1,5 +1,6 @@
 # pip install langchain streamlit faiss-cpu pypdf langchain-community transformers sentence-transformers langchainhub ollama pull llama2
-
+# python3 -m venv venv
+# source venv/bin/activate
 langchain
 streamlit
 faiss-cpu
