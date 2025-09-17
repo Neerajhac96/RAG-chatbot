@@ -16,6 +16,26 @@ with st.sidebar:
         accept_multiple_files=True
     )
 
+    # Show uploaded documents (current session)
+    st.subheader("Selected Documents (Current Session)")
+    if uploaded_files:
+        for uploaded_file in uploaded_files:
+            st.markdown(f"- {uploaded_file.name}")
+    else:
+        st.markdown("_No documents selected in this session._")
+
+    # Show previously uploaded documents (persisted in uploaded_docs)
+    st.subheader("All Uploaded Documents")
+    try:
+        prev_files = os.listdir(DOC_DIR)
+        if prev_files:
+            for fname in prev_files:
+                st.markdown(f"- {fname}")
+        else:
+            st.markdown("_No documents found in uploaded_docs._")
+    except Exception as e:
+        st.markdown(f"_Error reading uploaded_docs: {e}_")
+
     if st.button("Process Documents"):
         if uploaded_files:
             # Save files to a temporary directory
