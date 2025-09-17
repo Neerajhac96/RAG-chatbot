@@ -52,6 +52,9 @@ with st.sidebar:
             st.success(message)
         else:
             st.warning("Please upload documents first.")
+    if st.button("Clear Chat History"):
+       st.session_state.messages = []
+
 
 # Main chat interface
 if "messages" not in st.session_state:
@@ -61,7 +64,7 @@ if "messages" not in st.session_state:
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
-        if message["citations"]:
+        if message.get("citations"):
             st.markdown("---")
             st.markdown("**Sources:**")
             for citation in message["citations"]:

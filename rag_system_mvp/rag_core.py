@@ -6,7 +6,7 @@ from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from langchain_community.llms import Ollama # or from langchain_openai import OpenAI
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.llms import HuggingFaceEndpoint
+from langchain_huggingface import HuggingFaceEndpoint
 import os
 
 
@@ -145,9 +145,10 @@ def get_answer_from_llm(query):
     # except Exception as e:
     #     return f"LLM init error: {e}", []
     llm = HuggingFaceEndpoint(
-        repo_id="HuggingFaceH4/zephyr-7b-beta",     # ya koi bhi inference-supported model
+        repo_id="google/flan-t5-large",
+        task="text2text-generation",     # ya koi bhi inference-supported model
         huggingfacehub_api_token=os.environ["HF_TOKEN"],
-        temperature=0.2
+        temperature = 0.2
     )
     
     try:    
@@ -165,7 +166,7 @@ def get_answer_from_llm(query):
         return f"LLM/query error: {e}", []
     
     # Extract the answer and citations
-    answer = response("result") or response.get("answer") or str(response)
+    answer = response.get("result") or response.get("answer") or str(response)
     source_docs = response.get("source_documents", [])
     
     citations = []
