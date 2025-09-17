@@ -28,8 +28,6 @@ if not os.path.exists(DOC_DIR):
 # Initialize the embedding model
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-# A global variable to store the vector store
-db = None
 
 def get_text_from_documents(doc_paths):
     """
@@ -47,37 +45,39 @@ def get_text_from_documents(doc_paths):
                 print(f"Failed to load {doc_path}: {e}")
     return all_text
 
-def process_documents(doc_paths):
+def process_documents(doc_paths, existing_db=None):
     """
     Parse, split, create/update FAISS index, and save index to disk.
+    This function now accepts and returns the FAISS DB object.
     """
-    global db
     
     # 1. Load documents
     documents = get_text_from_documents(doc_paths)
     
     if not documents:
-        return "No documents found to process."
+        return existing_db, "No documents found to process."
     
     # 2. Split documents into chunks
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
+        chunk_size=500,
         chunk_overlap=200
     )
     docs = text_splitter.split_documents(documents)
     
     # 3. Create or update the vector store
     try:
-        if db is None:
+        if existing_db is None:
             db = FAISS.from_documents(docs, embeddings)
-            print("New FAISS vector store created.")
+            # print("New FAISS vector store created.")
+            message = "New FAISS vector store created."
         else:
             # A simple way to update - merge new docs into the existing FAISS index
             new_db = FAISS.from_documents(docs, embeddings)
-            db.merge_from(new_db)
-            print("FAISS vector store updated with new documents.")
+            existing_db.merge_from(new_db)
+            db = existing_db
+            message = "FAISS vector store updated with new documents."
     except Exception as e:
-        return f"Error creating/updating FAISS index: {e}"
+        return existing_db, f"Error creating/updating FAISS index: {e}"
 
     # Save index to disk for persistence
     try:
@@ -88,31 +88,25 @@ def process_documents(doc_paths):
     except Exception as e:
         print("Failed to save FAISS index:", e)
 
-    return "Documents processed and indexed successfully."
+    # return "Documents processed and indexed successfully."
+    return db, message
 
 def load_faiss_index_if_exists():
     """
     Try to load saved FAISS index from disk into global `db`.
     """
-    global db
+    # global db
     try:
         if os.path.exists(FAISS_INDEX_DIR) and os.listdir(FAISS_INDEX_DIR):
-            db = FAISS.load_local(FAISS_INDEX_DIR, embeddings)
+            db = FAISS.load_local(
+                FAISS_INDEX_DIR,
+                embeddings,
+                allow_dangerous_deserialization=True # Add this line
+            )
             print("Loaded FAISS index from disk.")
-            return True
+            return db
     except Exception as e:
         print("Error loading FAISS index:", e)
-        db = None
-    return False
-
-def initialize_vectorstore_on_import():
-    """
-    Called when module is imported. First try loading saved index.
-    If not present, look for files in uploaded_docs and build index automatically.
-    """
-    loaded = load_faiss_index_if_exists()
-    if loaded:
-        return
 
     # If no saved index, try to process files in DOC_DIR (if present)
     try:
@@ -121,20 +115,22 @@ def initialize_vectorstore_on_import():
             for f in os.listdir(DOC_DIR)
             if os.path.splitext(f)[1].lower() in LOADERS
         ]
-    except Exception:
-        files = []
 
-    if files:
-        print("Found files in uploaded_docs — building index now...")
-        process_documents(files)
-    else:
-        print("No docs to process at startup.")
+        if files:
+            print("No saved index found. Building a new one from uploaded documents...")
+            db, message = process_documents(files)
+            print(message)
+            return db
+    except Exception as e:
+        print("Error building index from existing documents:", e)
 
-def get_answer_from_llm(query):
+    return None
+
+def get_answer_from_llm(query, db):
     """
     Retrieves relevant chunks and generates an answer using an LLM.
     """
-    global db
+    # global db
     if db is None:
         return "Please upload documents first.", []
     
@@ -148,7 +144,8 @@ def get_answer_from_llm(query):
         repo_id="google/flan-t5-large",
         task="text2text-generation",     # ya koi bhi inference-supported model
         huggingfacehub_api_token=os.environ["HF_TOKEN"],
-        temperature = 0.2
+        temperature = 0.2,
+        max_new_tokens=200
     )
     
     try:    
@@ -161,7 +158,7 @@ def get_answer_from_llm(query):
         )
     
         # Get the response from the chain
-        response = qa_chain({"query": query})
+        response = qa_chain.invoke({"query": query})
     except Exception as e:
         return f"LLM/query error: {e}", []
     
@@ -177,4 +174,4 @@ def get_answer_from_llm(query):
     return answer, citations
 
 # Run initialization at import time
-initialize_vectorstore_on_import()
+# initialize_vectorstore_on_import()

@@ -1,11 +1,15 @@
 import streamlit as st
 import os
-from rag_core import process_documents, get_answer_from_llm, DOC_DIR
+from rag_core import process_documents, get_answer_from_llm, load_faiss_index_if_exists, DOC_DIR
 
 st.set_page_config(page_title="RAG Chatbot", layout="wide")
 
 st.title("Document-Based Q&A Chatbot")
 st.markdown("Upload your documents (PDF, DOCX, TXT) and ask questions about their content.")
+
+# Initialize FAISS database in session state
+if 'faiss_db' not in st.session_state:
+    st.session_state.faiss_db = load_faiss_index_if_exists()
 
 # Sidebar for document management
 with st.sidebar:
@@ -41,14 +45,23 @@ with st.sidebar:
             # Save files to a temporary directory
             file_paths = []
             for uploaded_file in uploaded_files:
-                file_path = os.path.join(DOC_DIR, uploaded_file.name)
+                # Use a unique filename to prevent overwriting
+                file_name = uploaded_file.name
+                base, ext = os.path.splitext(file_name)
+                counter = 1
+                file_path = os.path.join(DOC_DIR, file_name)
+                while os.path.exists(file_path):
+                    file_name = f"{base}_{counter}{ext}"
+                    file_path = os.path.join(DOC_DIR, file_name)
+                    counter += 1
+    
                 with open(file_path, "wb") as f:
                     f.write(uploaded_file.getbuffer())
                 file_paths.append(file_path)
             
             # Process the documents
             with st.spinner("Processing and indexing documents..."):
-                message = process_documents(file_paths)
+                st.session_state.faiss_db, message = process_documents(file_paths, st.session_state.faiss_db)
             st.success(message)
         else:
             st.warning("Please upload documents first.")
@@ -81,7 +94,7 @@ if query := st.chat_input("Ask a question about the documents..."):
     # Get the answer from the RAG system
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            answer, citations = get_answer_from_llm(query)
+            answer, citations = get_answer_from_llm(query, st.session_state.faiss_db)
             st.markdown(answer)
             if citations:
                 st.markdown("---")
